@@ -2,6 +2,7 @@
 (require 'json)
 (require 'url)
 (require 'mm-decode)
+(require 'cl)
 
 (defmacro n2wal-with-json-preset (&rest body)
   "Execute BODY with preferred json settings"
