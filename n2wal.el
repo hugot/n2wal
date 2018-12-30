@@ -313,7 +313,10 @@ will be checked for deletion or archiving"
           (if (or (and (eq 'error (caar wallabag-entry))
                        (= 404 (alist-get 'code (cdr (car wallabag-entry)))))
                   (= 1 (alist-get 'is_archived wallabag-entry)))
-              (push (alist-get 'miniflux-id pending-entry) read-entry-ids))))
+              (progn
+                (message "Miniflux article %d has been archived or deleted from wallabag."
+                         (alist-get 'miniflux-id pending-entry))
+                (push (alist-get 'miniflux-id pending-entry) read-entry-ids)))))
 
       (if read-entry-ids
           (progn
