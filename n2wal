@@ -1,0 +1,7 @@
+#!/bin/bash
+##
+# CLI launcher to run the n2wal sync
+
+HERE=$(dirname $(readlink -f "${BASH_SOURCE[0]}"))
+
+emacs --batch -l "$HERE/n2wal.el" -f n2wal-sync-feeds
