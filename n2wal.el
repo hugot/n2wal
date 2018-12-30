@@ -3,6 +3,7 @@
 (require 'url)
 (require 'mm-decode)
 (require 'cl)
+(require 'helm)
 
 (defmacro n2wal-with-json-preset (&rest body)
   "Execute BODY with preferred json settings"
@@ -30,7 +31,7 @@
                      (expiration-time . ,(+ (float-time) (alist-get 'expires_in token-payload)))
                      (token-type . ,(alist-get 'token_type token-payload)))))
 
-(defun n2wal-get-wallabag-token (host client-id client-secret username password)
+(defun n2wal-retrieve-and-store-wallabag-token (host client-id client-secret username password)
   (let* ((url-request-data
            (format "grant_type=password&client_id=%s&client_secret=%s&username=%s&password=%s"
                   client-id
@@ -47,7 +48,9 @@
                         host
                         (alist-get 'error response-data)
                         (alist-get 'error_description response-data)))
-            (n2wal-save-token-payload response-data)))))
+            (progn
+              (n2wal-save-token-payload response-data)
+              '(success))))))
 
 (defun n2wal-refresh-wallabag-token ()
   (interactive)
@@ -169,16 +172,14 @@ times to retrieve data from a miniflux instance"
                   (client-secret . ,(read-string "Wallabag client secret:" client-secret))
                   (username . ,(read-string "Wallabag username:" username))))
          (password (read-passwd "Wallabag password:" password))
-         (token (n2wal-get-wallabag-token
+         (token (n2wal-retrieve-and-store-wallabag-token
                  (alist-get 'host config)
                  (alist-get 'client-id config)
                  (alist-get 'client-secret config)
                  (alist-get 'username config)
                  password)))
     (if (not (eq (car token) 'error))
-        (progn
-          (n2wal-save-data "wallabag-token" token)
-          config)
+        config
       (if (string= "yes"
                    (cadr
                     (read-multiple-choice
