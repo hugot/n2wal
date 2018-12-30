@@ -105,8 +105,6 @@ times to retrieve data from a miniflux instance"
   (n2wal-with-json-preset
     (json-read-file config-location)))
 
-(defun n2wal-execute (config))
-
 (defun n2wal-fail-basic-auth (&rest args)
   (throw 'n2wal-auth-error nil))
 
