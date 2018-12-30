@@ -43,7 +43,7 @@
          (response (url-retrieve-synchronously (concat "https://" host "/oauth/v2/token"))))
         (let ((response-data (n2wal-get-json-from-response-buffer response)))
           (if (alist-get 'error response-data)
-              `(error ,(format
+              `(n2wal-error ,(format
                         "Got error response from %s: %s: %s"
                         host
                         (alist-get 'error response-data)
@@ -72,14 +72,18 @@
   "Create an anonymous function that can be called unlimited
 times to retrieve data from a miniflux instance"
   (lambda (method route &optional data)
-    (let ((url-request-method method)
-          (url-registered-auth-schemes `(("basic" n2wal-fail-basic-auth . 4)))
-          (url-request-extra-headers
-           `(("Accepts" . "application/json")
-             ("Authorization" . ,(concat "Basic "
-                                         (base64-encode-string (concat username ":" password))))))
-          (url-request-data (if data data)))
-      (url-retrieve-synchronously (concat "https://" host "/" route)))))
+    (let* ((url-request-method method)
+           (url-request-extra-headers
+            `(("Accepts" . "application/json")))
+           (url-request-data (if data data))
+           (response-buffer
+            (url-retrieve-synchronously
+             (concat "https://" username ":" password "@" host "/" route))))
+      (if (with-current-buffer response-buffer
+            (goto-char (point-min))
+            (looking-at "HTTP/1.1 400"))
+          `(n2wal-error ,(format "Failed to authenticate to miniflux host %s" host))
+        response-buffer))))
 
 (defun n2wal-make-wallabag-client (host token refresh-token expiration-time)
   (lambda (method route &optional data)
@@ -92,7 +96,6 @@ times to retrieve data from a miniflux instance"
             (setq expiration-time (alist-get 'expiration-time new-token-data)))))
 
         (let ((url-request-method method)
-              (url-registered-auth-schemes `(("basic" n2wal-fail-basic-auth . 4)))
               (url-request-extra-headers
                `(("Accepts" . "application/json")
                  ("Content-Type" . "application/json")
@@ -105,22 +108,18 @@ times to retrieve data from a miniflux instance"
   (n2wal-with-json-preset
     (json-read-file config-location)))
 
-(defun n2wal-fail-basic-auth (&rest args)
-  (throw 'n2wal-auth-error nil))
-
 (defun n2wal-check-miniflux-config (config)
-  "Check if CONFIG is valid and can be used to connect to miniflux"
-  (let ((client (n2wal-make-miniflux-client
+  "Check if CONFIG is valid and can be used to connect to
+miniflux. Returns either an `n2wal-error` (this can be discovered
+with `n2wal-error-p`) or a list with `success` as car."
+  (let* ((client (n2wal-make-miniflux-client
                  (alist-get 'host config)
                  (alist-get 'user config)
-                 (alist-get 'password config))))
-    (let ((url-registered-auth-schemes `(("basic" n2wal-fail-basic-auth . 4))))
-      (if (catch 'n2wal-auth-error
-            (buffer-live-p (funcall client "GET" "v1/feeds")))
-          t
-        (progn
-          (message "Failed to login at miniflux host %s" (alist-get 'host config))
-          nil)))))
+                 (alist-get 'password config)))
+         (response (funcall client "GET" "v1/feeds")))
+    (if (n2wal-error-p response)
+        response
+      '(success))))
 
 (defun n2wal-data-dir ()
   "Get the path of the directory where n2wal saves its data"
@@ -145,23 +144,27 @@ times to retrieve data from a miniflux instance"
         (insert (json-encode data))
         (write-file filepath)))))
 
+(defun n2wal-error-p (thing)
+  (and (listp thing) (eq 'n2wal-error (car thing))))
+
 (defun n2wal-create-miniflux-config (&optional host user password)
   "Interactively construct the config parameters for the miniflux connection"
   (let ((config `((host . ,(read-string "Miniflux instance host:" host))
                   (user . ,(read-string "Miniflux user:" user))
                   (password . ,(read-passwd "Miniflux password:")))))
-    (if (n2wal-check-miniflux-config config)
+    (let ((check-result (n2wal-check-miniflux-config config)))
+    (if (not (n2wal-error-p check-result))
         config
       (progn
         (if (string= "yes"
                      (cadr
                       (read-multiple-choice
-                       "Failed to authenticate to miniflux host, would you like to try again? :"
+                       (format "Error : \"%s\", would you like to try again?" (cadr check-result))
                        '((?y "yes") (?n "no")))))
             (n2wal-create-miniflux-config
              (alist-get 'host config)
              (alist-get 'user config)
-             (alist-get 'password config)))))))
+             (alist-get 'password config))))))))
 
 (defun n2wal-create-wallabag-config (&optional host client-id client-secret username password)
   "Interactively construct the config parameters for the wallabag connection"
@@ -176,7 +179,7 @@ times to retrieve data from a miniflux instance"
                  (alist-get 'client-secret config)
                  (alist-get 'username config)
                  password)))
-    (if (not (eq (car token) 'error))
+    (if (not (n2wal-error-p token))
         config
       (if (string= "yes"
                    (cadr
