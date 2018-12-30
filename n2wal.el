@@ -3,7 +3,7 @@
 (require 'url)
 (require 'mm-decode)
 (require 'cl)
-(require 'helm)
+(unless (string= (getenv "N2WAL_RUNNING_BATCH") "true") (require 'helm))
 
 (defmacro n2wal-with-json-preset (&rest body)
   "Execute BODY with preferred json settings"
