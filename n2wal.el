@@ -78,11 +78,19 @@ times to retrieve data from a miniflux instance"
            (url-request-data (if data data))
            (response-buffer
             (url-retrieve-synchronously
-             (concat "https://" username ":" password "@" host "/" route))))
+             (concat "https://" username ":" password "@" host "/" route)
+             t)))
       (if (with-current-buffer response-buffer
             (goto-char (point-min))
-            (looking-at "HTTP/1.1 400"))
-          `(n2wal-error ,(format "Failed to authenticate to miniflux host %s" host))
+            ;; For now, it is enough to just check for a 200 response,
+            ;; but this, of course, does not reflect the meaning of
+            ;; HTTP status codes so this check should be modified as
+            ;; needed when adding new functionalities.
+            (not (looking-at "HTTP/1.1 \\(200\\|204\\)")))
+          `(n2wal-error
+            ,(format "Request to minflux host returned unexpected results:\n%s: \"%s\""
+                     host
+                     (with-current-buffer response-buffer (buffer-string))))
         response-buffer))))
 
 (defun n2wal-make-wallabag-client (host token refresh-token expiration-time)
@@ -101,7 +109,7 @@ times to retrieve data from a miniflux instance"
                  ("Content-Type" . "application/json")
                  ("Authorization" . ,(format "Bearer %s" token))))
               (url-request-data (if data data)))
-          (url-retrieve-synchronously (concat "https://" host "/" route)))))
+          (url-retrieve-synchronously (concat "https://" host "/" route) t))))
 
 (defun n2wal-read-config (config-location)
   "Read the JSON config in the file at CONFIG-LOCATION"
@@ -276,13 +284,10 @@ will be checked for deletion or archiving"
           pending-feed-entries)
     (n2wal-save-pending-entries-for-feed feed pending-feed-entries)))
 
-(defun n2wal-sync-feed (config feed)
+(defun n2wal-sync-feed (config miniflux-client feed)
+  (message "Syncing articles of miniflux feed %d"
+           (alist-get 'id feed))
   (let* ((miniflux-config (alist-get 'miniflux config))
-         (miniflux-client
-          (n2wal-make-miniflux-client
-           (alist-get 'host miniflux-config)
-           (alist-get 'user miniflux-config)
-           (alist-get 'password miniflux-config)))
 
          (wallabag-config (alist-get 'wallabag config))
          (wallabag-token-data (n2wal-get-data "wallabag-token"))
@@ -336,8 +341,25 @@ will be checked for deletion or archiving"
 
             (n2wal-save-pending-entries-for-feed feed pending-entries))))))
 
+(defun n2wal-refresh-feed (miniflux-client feed)
+  (let* ((feed-id (alist-get 'id feed))
+         (response (funcall miniflux-client
+                           "PUT"
+                           (format "v1/feeds/%d/refresh" feed-id))))
+    (message "Refreshing feed %d on miniflux server" feed-id)
+    (if (n2wal-error-p response)
+        (error "Failed to sync feed %d: \"%s\"" feed-id (cadr response)))))
+
 (defun n2wal-sync-feeds ()
   (interactive)
-  (let ((config (n2wal-get-data "config")))
+  (let* ((config (n2wal-get-data "config"))
+         (miniflux-config (alist-get 'miniflux config))
+         (miniflux-client
+          (n2wal-make-miniflux-client
+           (alist-get 'host miniflux-config)
+           (alist-get 'user miniflux-config)
+           (alist-get 'password miniflux-config))))
+
     (dolist (feed (alist-get 'feeds config))
-      (n2wal-sync-feed config feed))))
+      (n2wal-refresh-feed miniflux-client feed)
+      (n2wal-sync-feed config miniflux-client feed))))
