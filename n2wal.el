@@ -150,6 +150,10 @@ with `n2wal-error-p`) or a list with `success` as car."
     (with-temp-buffer
       (n2wal-with-json-preset
         (insert (json-encode data))
+
+        ;; The config might be edited by hand, so we should keep it
+        ;; pretty.
+        (if (string= filename "config") (json-pretty-print-buffer))
         (write-file filepath)))))
 
 (defun n2wal-error-p (thing)
