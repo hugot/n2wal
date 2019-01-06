@@ -36,6 +36,12 @@
       "Pick a miniflux feed using ido as selection method"
       (split-string (ido-completing-read "Pick a feed:" (n2wal-get-remote-feed-list)) " - "))))
 
+(defun n2wal-add-feed-and-quit ()
+  "Add a feed and prompt to quit emacs"
+  (call-interactively 'n2wal-add-feed)
+  (if (string= "" (read-string "Feed added, press RET (ENTER) to quit emacs"))
+      (kill-emacs)))
+
 (defun n2wal-save-token-payload (token-payload)
   (n2wal-save-data "wallabag-token"
                    `((token . ,(alist-get 'access_token token-payload))
