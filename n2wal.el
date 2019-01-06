@@ -24,6 +24,19 @@
     (n2wal-with-json-preset
       (json-read))))
 
+;; When helm is available, it should be the preferred selection
+;; method, otherwise we'll fall back to ido.
+(if (require 'helm nil 'noerror)
+    (defun n2wal-remote-feeds-picker ()
+      "Pick a miniflux feed using helm as selection method"
+      (split-string (helm :sources (helm-build-sync-source "*N2WAL REMOTE FEEDS*"
+                                     :candidates (n2wal-get-remote-feed-list))) " - "))
+  (progn
+    (require 'ido)
+    (defun n2wal-remote-feeds-picker ()
+      "Pick a miniflux feed using ido as selection method"
+      (split-string (ido-completing-read "Pick a feed:" (n2wal-get-remote-feed-list))))))
+
 (defun n2wal-save-token-payload (token-payload)
   (n2wal-save-data "wallabag-token"
                    `((token . ,(alist-get 'access_token token-payload))
@@ -253,10 +266,6 @@ miniflux feeds that should be synced"
           (alist-get 'feeds config))
     (n2wal-save-data "config" config))
   (n2wal-show-feeds))
-
-(defun n2wal-remote-feeds-picker ()
-  (split-string (helm :sources (helm-build-sync-source "*N2WAL REMOTE FEEDS*"
-                                 :candidates (n2wal-get-remote-feed-list))) " - "))
 
 (defun n2wal-get-unread-entries-for-feed (miniflux-client feed)
   "Retrieve unread entries for a feed. MINIFLUX-CLIENT should be a
