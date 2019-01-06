@@ -2,6 +2,15 @@
 ##
 # CLI launcher to run the n2wal sync
 
+set -eo pipefail
+
+# Set the PATH for cron compatibility. This will work when there is a
+# "system" emacs installed. Otherwise, a wrapper script might be
+# necessary.
+export PATH="$PATH:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"
+
 HERE=$(dirname $(readlink -f "${BASH_SOURCE[0]}"))
 
-N2WAL_RUNNING_BATCH=true /usr/local/bin/emacs --batch -l "$HERE/n2wal.el" -f n2wal-sync-feeds 2>&1 | while read -r line; do echo "[$(date)] $line"; done | tee -a ~/.n2wal.d/sync.log
+emacs --batch -l "$HERE/n2wal.el" -f n2wal-sync-feeds 2>&1 \
+    | while read -r line; do echo "[$(date)] $line"; done \
+    | tee -a ~/.n2wal.d/sync.log
