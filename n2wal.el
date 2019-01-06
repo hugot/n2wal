@@ -3,7 +3,6 @@
 (require 'url)
 (require 'mm-decode)
 (require 'cl)
-(unless (string= (getenv "N2WAL_RUNNING_BATCH") "true") (require 'helm))
 
 (defmacro n2wal-with-json-preset (&rest body)
   "Execute BODY with preferred json settings"
@@ -35,7 +34,7 @@
     (require 'ido)
     (defun n2wal-remote-feeds-picker ()
       "Pick a miniflux feed using ido as selection method"
-      (split-string (ido-completing-read "Pick a feed:" (n2wal-get-remote-feed-list))))))
+      (split-string (ido-completing-read "Pick a feed:" (n2wal-get-remote-feed-list)) " - "))))
 
 (defun n2wal-save-token-payload (token-payload)
   (n2wal-save-data "wallabag-token"
