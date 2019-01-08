@@ -308,16 +308,8 @@ will be checked for deletion or archiving"
 
 (defun n2wal-propagate-read-in-wallabag-to-miniflux (miniflux-client wallabag-client feed)
   "Mark all articles that were read on wallabag as read at the miniflux instance"
-  (let ((unread-entries (alist-get 'entries
-                                   (n2wal-get-unread-entries-for-feed miniflux-client feed)))
-        (pending-entries (n2wal-get-pending-entries-for-feed feed)))
+  (let ((pending-entries (n2wal-get-pending-entries-for-feed feed)))
 
-    (dolist (unread-entry unread-entries)
-      (if (not (seq-find (lambda (pending-entry)
-                           (= (alist-get 'miniflux-id pending-entry)
-                              (alist-get 'id unread-entry)))
-                         pending-entries))
-          (n2wal-add-pending-entry wallabag-client unread-entry feed)))
 
     (let ((read-entry-ids))
       (dolist (pending-entry pending-entries)
@@ -349,10 +341,27 @@ will be checked for deletion or archiving"
 
             (n2wal-save-pending-entries-for-feed feed pending-entries))))))
 
+(defun n2wal-add-unread-miniflux-articles-to-wallabag (miniflux-client wallabag-client feed)
+  (let ((unread-entries (alist-get 'entries
+                                   (n2wal-get-unread-entries-for-feed miniflux-client feed)))
+        (pending-entries (n2wal-get-pending-entries-for-feed feed)))
+
+    (dolist (unread-entry unread-entries)
+      (if (not (seq-find (lambda (pending-entry)
+                           (= (alist-get 'miniflux-id pending-entry)
+                              (alist-get 'id unread-entry)))
+                         pending-entries))
+          (progn
+            (n2wal-add-pending-entry wallabag-client unread-entry feed)
+            (message "Added article %d - \"%s\" to wallabag"
+                     (alist-get 'id unread-entry)
+                     (alist-get 'title unread-entry)))))))
+
 
 (defun n2wal-sync-feed (config miniflux-client feed)
-  (message "Syncing articles of miniflux feed %d"
-           (alist-get 'id feed))
+  (message "Syncing articles of miniflux feed %d: \"%s\""
+           (alist-get 'id feed)
+           (alist-get 'title feed))
   (let* ((wallabag-config (alist-get 'wallabag config))
          (wallabag-token-data (n2wal-get-data "wallabag-token"))
          (wallabag-client (n2wal-make-wallabag-client
@@ -361,7 +370,8 @@ will be checked for deletion or archiving"
                            (alist-get 'refresh-token wallabag-token-data)
                            (alist-get 'expiration-time wallabag-token-data))))
     (n2wal-propagate-read-in-miniflux-to-wallabag miniflux-client wallabag-client feed)
-    (n2wal-propagate-read-in-wallabag-to-miniflux miniflux-client wallabag-client feed)))
+    (n2wal-propagate-read-in-wallabag-to-miniflux miniflux-client wallabag-client feed)
+    (n2wal-add-unread-miniflux-articles-to-wallabag miniflux-client wallabag-client feed)))
 
 (defun n2wal-get-miniflux-article (miniflux-client article-id)
   (n2wal-get-json-from-response-buffer
