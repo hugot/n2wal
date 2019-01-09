@@ -393,8 +393,10 @@ wallabag instance, unless they were archived on the wallabag side."
              (miniflux-article (n2wal-get-miniflux-article miniflux-client miniflux-id)))
         (if (string= "read" (alist-get 'status miniflux-article))
             (progn
-              (push (alist-get 'wallabag-id pending-entry) read-article-ids)
-              (message "Detected that miniflux article %d was read" wallabag-id)))))
+              (push wallabag-id read-article-ids)
+              (message "Detected that miniflux article %d (wallabag article %d) was read"
+                       miniflux-id
+                       wallabag-id)))))
 
     (dolist (article-id read-article-ids)
       (let* ((response (n2wal-get-wallabag-article wallabag-client article-id))
