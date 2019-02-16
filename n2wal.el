@@ -84,7 +84,31 @@
          (response (url-retrieve-synchronously (concat "https://"
                                                        (alist-get 'host wallabag-config)
                                                        "/oauth/v2/token"))))
-    (n2wal-save-token-payload (n2wal-get-json-from-response-buffer response))))
+
+    (let* ((response-json (n2wal-get-json-from-response-buffer response))
+          (response-error (alist-get 'error response-json)))
+      (if (and response-error (string= response-error "invalid_grant"))
+          (progn
+            (message "Failed to retrieve a new wallabag auth token, refresh token is expired.")
+            (sleep-for 1)
+            (n2wal-replace-wallabag-config)
+            (n2wal-refresh-wallabag-token))
+        (n2wal-save-token-payload (n2wal-get-json-from-response-buffer response))))))
+
+(defun n2wal-replace-wallabag-config ()
+  "Replace the wallabag configuration that is currently active
+with a new one that is created interactively."
+  (interactive)
+  (let* ((config (n2wal-get-data "config"))
+         (wallabag-config (alist-get 'wallabag config)))
+    (setcdr wallabag-config
+            (n2wal-create-wallabag-config
+             (alist-get 'host wallabag-config)
+             (alist-get 'client-id wallabag-config)
+             (alist-get 'client-secret wallabag-config)
+             (alist-get 'username wallabag-config)))
+
+    (n2wal-save-data "config" config)))
 
 (defun n2wal-make-miniflux-client (host username password)
   "Create an anonymous function that can be called unlimited
