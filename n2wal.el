@@ -381,6 +381,47 @@ will be checked for deletion or archiving"
   (n2wal-get-json-from-response-buffer
    (funcall wallabag-client "DELETE" (format "api/entries/%d" article-id))))
 
+(defun n2wal-make-wallabag-client-from-config ()
+  (let ((config (n2wal-get-data "config"))
+        (token (n2wal-get-data "wallabag-token")))
+    (n2wal-make-wallabag-client
+     (alist-get 'host (alist-get 'wallabag config))
+     (alist-get 'token token)
+     (alist-get 'refresh-token token)
+     (alist-get 'expiration-time token))))
+
+
+(defun n2wal-delete-feed (wallabag-client feed-id)
+  (interactive (list (n2wal-make-wallabag-client-from-config)
+                     (read-number "Feed id: ")))
+  (let* ((config (n2wal-get-data "config"))
+         (feed (seq-find
+                (lambda (config-feed) (= (alist-get 'id config-feed) feed-id))
+                (alist-get 'feeds config))))
+
+    (dolist (pending-entry (n2wal-get-pending-entries-for-feed feed))
+      (message "Deleting article %d from wallabag" (alist-get 'wallabag-id pending-entry))
+      (let ((deletion-response (n2wal-delete-wallabag-article
+                                wallabag-client
+                                (alist-get 'wallabag-id pending-entry))))
+        (if (alist-get 'error deletion-response)
+            (message "An error occured while deleting wallabag-article %d: %s"
+                     (alist-get 'wallabag-id pending-entry)
+                     (pp (alist-get 'error deletion-response))))))
+
+    (setcdr (assoc 'feeds config 'eq)
+            (seq-filter (lambda (feed)
+                          (not (= (alist-get 'id feed) feed-id)))
+                        (cdr (assoc 'feeds config 'eq))))
+
+    (n2wal-delete-data (format "feed-%d" feed-id))
+
+    (n2wal-save-data "config" config)))
+
+(defun n2wal-delete-data (filename)
+  (let ((filepath (concat (n2wal-data-dir) "/" filename ".json")))
+    (delete-file filepath)))
+
 (defun n2wal-propagate-read-in-miniflux-to-wallabag (miniflux-client wallabag-client feed)
   "Delete all articles that were read in miniflux from the
 wallabag instance, unless they were archived on the wallabag side."
