@@ -321,10 +321,14 @@ will be checked for deletion or archiving"
                              (json-encode `((url . ,(alist-get 'url miniflux-entry)))))))
          (pending-feed-entries (n2wal-get-pending-entries-for-feed feed))
          (response-data (n2wal-get-json-from-response-buffer response)))
-    (push `((miniflux-id . ,(alist-get 'id miniflux-entry))
-            (wallabag-id . ,(alist-get 'id response-data)))
-          pending-feed-entries)
-    (n2wal-save-pending-entries-for-feed feed pending-feed-entries)))
+    (if (not (alist-get 'id response-data))
+        (message "Error while adding article, unable to extract wallabag article id from response: %s"
+                 (with-current-buffer response (buffer-string)))
+      (progn
+        (push `((miniflux-id . ,(alist-get 'id miniflux-entry))
+                (wallabag-id . ,(alist-get 'id response-data)))
+              pending-feed-entries)
+        (n2wal-save-pending-entries-for-feed feed pending-feed-entries)))))
 
 (defun n2wal-get-wallabag-article (wallabag-client article-id)
   (n2wal-get-json-from-response-buffer
